@@ -18,3 +18,5 @@ EcoYield Pro is a Machine Learning application designed to bridge the gap betwee
 ## 📊 Results
 * Achieved **98% accuracy** on the test dataset using Random Forest.
 * Successfully identifies "High Waste" scenarios to reduce environmental soil damage.
+
+![Dashboard Screenshot](images/image1.png)
