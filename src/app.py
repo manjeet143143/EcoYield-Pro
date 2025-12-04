@@ -1,13 +1,31 @@
 import streamlit as st
 import pandas as pd
 import pickle
-import matplotlib.pyplot as plt
-import numpy as np
+import plotly.graph_objects as go
+import plotly.express as px
 
-# --- 1. CONFIGURATION ---
-st.set_page_config(page_title="EcoYield Pro", page_icon="🌾", layout="centered")
+# --- 1. PRO CONFIGURATION ---
+st.set_page_config(
+    page_title="EcoYield Pro",
+    page_icon="🌱",
+    layout="wide",  # Uses the full screen width
+    initial_sidebar_state="expanded"
+)
 
-# --- 2. LOAD MODEL (Cached for speed) ---
+# --- CUSTOM CSS FOR PROFESSIONAL LOOK ---
+st.markdown("""
+    <style>
+    .big-font { font-size: 20px !important; font-weight: 500; }
+    .stMetric {
+        background-color: #f0f2f6;
+        padding: 15px;
+        border-radius: 10px;
+        border: 1px solid #e0e0e0;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+
+# --- 2. LOAD MODEL ---
 @st.cache_resource
 def load_model():
     with open('models/yield_model.pkl', 'rb') as f:
@@ -16,101 +34,126 @@ def load_model():
         encoder = pickle.load(f)
     return model, encoder
 
-model, label_encoder = load_model()
+try:
+    model, label_encoder = load_model()
+except:
+    st.error("⚠️ Model files not found. Please run 'train.py' first.")
+    st.stop()
 
-# --- 3. HEADER & SIDEBAR ---
-st.title("🌾 EcoYield Pro")
-st.markdown("### AI-Based Sustainable Crop Yield Prediction")
-st.markdown("Adjust the soil and weather parameters below to predict yield and environmental impact.")
-
-st.sidebar.header("📝 Field Parameters")
-
-# Create a form in the sidebar
-with st.sidebar.form("prediction_form"):
-    st.subheader("1. Crop Selection")
-    # We get the list of crops the model knows (from the encoder)
-    crop_options = list(label_encoder.classes_)
-    crop_name = st.selectbox("Select Crop Type", crop_options)
-    
-    st.subheader("2. Soil Nutrients")
-    N = st.slider("Nitrogen (N)", 0, 140, 80)
-    P = st.slider("Phosphorus (P)", 0, 145, 40)
-    K = st.slider("Potassium (K)", 0, 205, 40)
-    
-    st.subheader("3. Weather Conditions")
-    temp = st.number_input("Temperature (°C)", value=25.0, step=0.1)
-    hum = st.number_input("Humidity (%)", value=70.0, step=0.1)
-    ph = st.number_input("Soil pH", value=6.5, step=0.1)
-    rain = st.number_input("Rainfall (mm)", value=200.0, step=1.0)
-    
-    # The "Predict" Button
-    submit_btn = st.form_submit_button("🚀 Predict Yield")
-
-# --- 4. PREDICTION LOGIC ---
-if submit_btn:
-    # Prepare Data
-    crop_num = label_encoder.transform([crop_name])[0]
-    input_data = pd.DataFrame([[N, P, K, temp, hum, ph, rain, crop_num]], 
-                              columns=['N', 'P', 'K', 'temperature', 'humidity', 'ph', 'rainfall', 'crop_num'])
-    
-    # Get Prediction
-    prediction = model.predict(input_data)[0]
-    
-    # Calculate Sustainability (PFP)
-    total_chemicals = N + P + K
-    if total_chemicals == 0: total_chemicals = 1
-    pfp_score = prediction / total_chemicals
-
-    # Determine Status
-    if pfp_score > 0.15:
-        status = "SUSTAINABLE (Eco-Friendly)"
-        color = "green"
-    elif pfp_score > 0.08:
-        status = "MODERATE (Standard)"
-        color = "orange"
-    else:
-        status = "UNSUSTAINABLE (Excessive Chemicals)"
-        color = "red"
-
-    # --- 5. DISPLAY RESULTS ---
+# --- 3. SIDEBAR (CONTROLS) ---
+with st.sidebar:
+    st.image("https://cdn-icons-png.flaticon.com/512/6062/6062646.png", width=80)
+    st.title("EcoYield Pro")
+    st.caption("AI-Driven Precision Agriculture")
     st.divider()
-    
-    # Use Columns for a clean layout
+
+    st.header("1. Crop Details")
+    crop_options = list(label_encoder.classes_)
+    crop_name = st.selectbox("Target Crop", crop_options, index=crop_options.index('rice') if 'rice' in crop_options else 0)
+
+    st.header("2. Soil Composition")
     col1, col2 = st.columns(2)
-    
     with col1:
-        st.metric(label="🌱 Projected Yield", value=f"{prediction:.2f} Tons/Ha")
-    
+        N = st.number_input("Nitrogen (N)", 0, 150, 80)
+        K = st.number_input("Potassium (K)", 0, 150, 40)
     with col2:
-        st.metric(label="🧪 Chemical Efficiency", value=f"{pfp_score:.4f}", delta=status, delta_color="off")
-        st.caption(f"Status: :{color}[{status}]")
+        P = st.number_input("Phosphorus (P)", 0, 150, 40)
+        ph = st.number_input("Soil pH", 0.0, 14.0, 6.5)
 
-    # --- 6. VISUALIZATION ---
-    st.subheader("📊 Analysis Report")
+    st.header("3. Weather Data")
+    temp = st.slider("Temperature (°C)", 10.0, 50.0, 25.0)
+    hum = st.slider("Humidity (%)", 10.0, 100.0, 70.0)
+    rain = st.slider("Rainfall (mm)", 0.0, 400.0, 200.0)
     
-    fig, ax = plt.subplots(figsize=(8, 4))
-    
-    # Data for chart
-    categories = ['Yield Output', 'Chemical Input (scaled)']
-    values = [prediction, total_chemicals / 100] # Scaling input down to match yield scale visually
-    colors = ['#4CAF50', '#FF5722'] # Green and Deep Orange
-    
-    bars = ax.bar(categories, values, color=colors)
-    ax.set_ylabel("Metric Units")
-    ax.set_title(f"Efficiency Check for {crop_name}")
-    
-    # Add numbers on bars
-    for bar in bars:
-        height = bar.get_height()
-        ax.text(bar.get_x() + bar.get_width()/2., height,
-                f'{height:.2f}',
-                ha='center', va='bottom')
+    st.divider()
+    submit_btn = st.button("🚀 Run Prediction", type="primary", use_container_width=True)
 
-    # Send the plot to Streamlit
-    st.pyplot(fig)
+# --- 4. MAIN DASHBOARD ---
+st.markdown("## 📊 Field Analysis Report")
+
+if submit_btn:
+    # Prediction Logic
+    crop_num = label_encoder.transform([crop_name])[0]
+    input_df = pd.DataFrame([[N, P, K, temp, hum, ph, rain, crop_num]], 
+                            columns=['N', 'P', 'K', 'temperature', 'humidity', 'ph', 'rainfall', 'crop_num'])
     
-    # Advice Section
-    if color == "red":
-        st.warning("⚠️ Recommendation: Your chemical usage is too high for this yield. Try reducing Nitrogen by 10% to improve sustainability.")
-    elif color == "green":
-        st.success("✅ Recommendation: Excellent balance! Maintain current practices.")
+    prediction = model.predict(input_df)[0]
+    
+    # Logic: PFP (Partial Factor Productivity)
+    total_nutrients = N + P + K
+    if total_nutrients == 0: total_nutrients = 1
+    pfp_score = prediction / (total_nutrients/1000) # Scaling for display logic (Yield in tons vs Input in kg)
+    # Simplified Logic for Demo:
+    # Yield (Tons) / Input (kg) is tiny. Let's use simple Ratio: Yield / (Input/100)
+    efficiency = prediction / (total_nutrients if total_nutrients > 0 else 1)
+
+    # Status Logic
+    if efficiency > 0.15:
+        status = "Sustainable"
+        color = "green"
+        msg = "Excellent! High yield with minimal chemical footprint."
+    elif efficiency > 0.08:
+        status = "Moderate"
+        color = "orange"
+        msg = "Acceptable. Consider reducing Nitrogen by 10%."
+    else:
+        status = "Unsustainable"
+        color = "red"
+        msg = "Warning: Diminishing returns detected. High chemical waste."
+
+    # --- TOP METRICS ROW ---
+    m1, m2, m3 = st.columns(3)
+    m1.metric("🌱 Projected Yield", f"{prediction:.2f} Tons/Ha", delta="AI Forecast")
+    m2.metric("🧪 Chemical Input", f"{total_nutrients} kg/ha", delta="Field Data", delta_color="off")
+    m3.metric("🌍 Sustainability Score", f"{efficiency:.4f}", delta=status, delta_color="normal" if color=="green" else "inverse")
+
+    st.divider()
+
+    # --- PROFESSIONAL CHARTS (PLOTLY) ---
+    c1, c2 = st.columns([2, 1])
+
+    with c1:
+        st.subheader("Efficiency Analysis")
+        # Interactive Gauge Chart
+        fig_gauge = go.Figure(go.Indicator(
+            mode = "gauge+number+delta",
+            value = efficiency,
+            domain = {'x': [0, 1], 'y': [0, 1]},
+            title = {'text': "Sustainability Index", 'font': {'size': 24}},
+            delta = {'reference': 0.15, 'increasing': {'color': "green"}},
+            gauge = {
+                'axis': {'range': [0, 0.3], 'tickwidth': 1, 'tickcolor': "darkblue"},
+                'bar': {'color': "#1f77b4"},
+                'bgcolor': "white",
+                'borderwidth': 2,
+                'bordercolor': "gray",
+                'steps': [
+                    {'range': [0, 0.08], 'color': '#ffcccb'},  # Red Zone
+                    {'range': [0.08, 0.15], 'color': '#ffe5b4'}, # Orange Zone
+                    {'range': [0.15, 0.3], 'color': '#d0f0c0'}], # Green Zone
+                'threshold': {
+                    'line': {'color': "red", 'width': 4},
+                    'thickness': 0.75,
+                    'value': efficiency}}))
+        st.plotly_chart(fig_gauge, use_container_width=True)
+
+    with c2:
+        st.subheader("AI Recommendation")
+        if color == "green":
+            st.success(f"**Action:** {msg}")
+        elif color == "orange":
+            st.warning(f"**Action:** {msg}")
+        else:
+            st.error(f"**Action:** {msg}")
+            
+        st.info(f"""
+        **Stats for {crop_name}:**
+        - Temp: {temp}°C
+        - Rainfall: {rain}mm
+        - pH: {ph}
+        """)
+
+else:
+    st.info("👈 Please adjust the field parameters in the sidebar and click 'Run Prediction'")
+    # Placeholder image to look nice before prediction
+    st.image("https://images.unsplash.com/photo-1625246333195-58197bd47d26?q=80&w=2000&auto=format&fit=crop", caption="Smart Agriculture Dashboard")
